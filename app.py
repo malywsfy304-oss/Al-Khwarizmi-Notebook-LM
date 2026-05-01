@@ -1,17 +1,24 @@
 from playwright.async_api import async_playwright
 from flask import Flask, request, jsonify
-import asyncio, os
+import asyncio, os, json
 
 app = Flask(__name__)
 
+# ✅ يقرأ الـ Cookies من Environment Variable
+def load_cookies():
+    raw = os.environ.get("COOKIES_JSON", "[]")
+    return json.loads(raw)
+
 async def ask_notebooklm(file_url: str, question: str) -> str:
     async with async_playwright() as p:
-        # فتح متصفح مخفي (Headless)
+        # فتح متصفح مخفي
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        context = await browser.new_context()
 
-        # تسجيل الدخول بـ Google (يستخدم cookies محفوظة)
-        await page.context.add_cookies(load_cookies())
+        # ✅ تحميل الـ Cookies
+        await context.add_cookies(load_cookies())
+
+        page = await context.new_page()
 
         # فتح NotebookLM
         await page.goto("https://notebooklm.google.com")
@@ -24,7 +31,7 @@ async def ask_notebooklm(file_url: str, question: str) -> str:
         await page.click("text=Add source")
         await page.fill("input[type='url']", file_url)
         await page.click("text=Insert")
-        await page.wait_for_timeout(4000)  # انتظر التحليل
+        await page.wait_for_timeout(4000)
 
         # إرسال السؤال
         await page.fill("[placeholder*='Ask']", question)
@@ -43,3 +50,7 @@ def analyze():
         ask_notebooklm(data["file_url"], data["question"])
     )
     return jsonify({"answer": result})
+
+@app.route("/")
+def home():
+    return jsonify({"status": "Al-Khwarizmi Bot is running ✅"})
